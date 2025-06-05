@@ -1,0 +1,77 @@
+# Specifies the AWS CloudFormation template language version.
+AWSTemplateFormatVersion: '2010-09-09'
+# Specifies the AWS Serverless Application Model (SAM) transform, which simplifies CloudFormation syntax for serverless resources.
+Transform: AWS::Serverless-2016-10-31
+Description: >
+   YouTube SAM deployment
+
+# Defines parameters that can be passed to the CloudFormation stack when it's created or updated.
+Parameters:
+  # The domain name registered in Route 53.
+  Route53DomainName:
+    Type: String 
+    Default: DOMAIN NAME
+    AllowedValues:
+      - DOMAIN NAME
+
+  # The AWS account number where resources will be deployed.
+  AwsAccountNumber:
+    Type: String 
+    Default: ACCOUNT NUMBER
+    AllowedValues:
+      - ACCOUNT NUMBER
+
+  # The ID of the Hosted Zone in Route 53 for the specified domain name.
+  HostedZoneIDName: 
+    Type: String
+    Default: YOUR HOSTED ZONE
+    AllowedValues:
+      - YOUR HOSTED ZONE
+
+  # The name of the S3 bucket that will host the React application's static files.
+  ReactBucketName:
+    Type: String 
+    Default: example-bucket-12345665874
+    AllowedValues:
+      - example-bucket-12345665874
+
+  # The ARN of the ACM certificate in us-east-1, required for CloudFront distributions with custom domain names.
+  CloudFrontCertUsEast1: 
+    Type: String
+    Default: e2b6a807-3570-4c75-acdb-42d1c452afb3
+    AllowedValues:
+      - e2b6a807-3570-4c75-acdb-42d1c452afb3
+
+
+Resources:
+  S3Stack:
+    # Deploys a nested CloudFormation stack for S3 bucket resources.
+    Type: AWS::Serverless::Application
+    Properties:
+      # Location of the nested stack's template file.
+      Location: s3Buckets/template.yaml
+      Parameters: 
+        ReactBucketName: !Ref ReactBucketName
+        AwsAccountNumber: !Ref AwsAccountNumber
+        # Passes the CloudFront Distribution ID output from the CloudfrontStack to the S3Stack.
+        ReactCloudFrontDistribution: !GetAtt CloudfrontStack.Outputs.CloudfrontDistributionID
+
+ # cloud front
+  CloudfrontStack:
+    # Deploys a nested CloudFormation stack for CloudFront distribution resources.
+    Type: AWS::Serverless::Application
+    Properties:
+      # Location of the nested stack's template file.
+      Location: cloudfront/template.yaml
+      Parameters: 
+        AwsAccountNumber: !Ref AwsAccountNumber
+        ReactBucketName: !Ref ReactBucketName
+        Route53DomainName: !Ref Route53DomainName
+        HostedZoneIDName: !Ref HostedZoneIDName
+        CloudFrontCertUsEast1: !Ref CloudFrontCertUsEast1
+  # Defines outputs that can be referenced by other stacks or viewed in the AWS CloudFormation console.
+Outputs:
+  CloudFrontID:
+    Description: Cloudfront Distribution ID
+    # Exports the CloudFront Distribution ID created by the CloudfrontStack.
+    Value: !GetAtt CloudfrontStack.Outputs.CloudfrontDistributionID

@@ -1,0 +1,10 @@
+version = 0.1
+[default.deploy.parameters]
+stack_name = "youtube-sam-tutorial"
+resolve_s3 = true
+s3_prefix = "youtube-sam-tutorial"
+region = "us-west-1"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM CAPABILITY_AUTO_EXPAND"
+parameter_overrides = "Route53DomainName=\"digital-innovation-services.com\" AwsAccountNumber=\"261461557941\" HostedZoneIDName=\"Z0839489Y5F6C2EYO3IK\" ReactBucketName=\"example-bucket-12345665874\" CloudFrontCertUsEast1=\"e2b6a807-3570-4c75-acdb-42d1c452afb3\""
+image_repositories = []

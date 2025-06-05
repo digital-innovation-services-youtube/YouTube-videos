@@ -1,0 +1,46 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: 'S3 Infrastructure
+
+  '
+Parameters:
+  ReactBucketName:
+    Type: String
+  ReactCloudFrontDistribution:
+    Type: String
+  AwsAccountNumber:
+    Type: String
+Resources:
+  ApplicationReactBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName:
+        Ref: ReactBucketName
+  S3ReactBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket:
+        Ref: ReactBucketName
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Action:
+          - s3:*
+          Effect: Deny
+          Principal: '*'
+          Resource:
+            Fn::Sub: arn:aws:s3:::${ReactBucketName}/*
+          Condition:
+            Bool:
+              aws:SecureTransport: 'false'
+        - Action:
+          - s3:GetObject
+          Effect: Allow
+          Principal:
+            Service: cloudfront.amazonaws.com
+          Condition:
+            StringEquals:
+              AWS:SourceArn:
+                Fn::Sub: arn:aws:cloudfront::${AwsAccountNumber}:distribution/${ReactCloudFrontDistribution}
+          Resource:
+            Fn::Sub: arn:aws:s3:::${ReactBucketName}/*

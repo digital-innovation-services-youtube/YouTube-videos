@@ -1,0 +1,54 @@
+# Specifies the AWS CloudFormation template language version.
+AWSTemplateFormatVersion: '2010-09-09'
+# Specifies the AWS Serverless Application Model (SAM) transform, which simplifies CloudFormation syntax for serverless resources.
+Transform: AWS::Serverless-2016-10-31
+Description: >
+   S3 Infrastructure
+
+# Defines parameters that are passed to this nested stack from the parent stack.
+Parameters: 
+  # The name for the S3 bucket that will store the React application's static files.
+  ReactBucketName:
+    Type: String
+  # The ID of the CloudFront distribution that will serve content from the S3 bucket.
+  ReactCloudFrontDistribution:
+    Type: String
+  # The AWS account number, used in the S3 bucket policy to restrict access to the CloudFront distribution.
+  AwsAccountNumber:
+    Type: String
+
+# Defines the AWS resources to be created by this stack.
+Resources:
+  # Defines the S3 bucket for storing the React application's static content.
+  ApplicationReactBucket:
+    Type: AWS::S3::Bucket
+    Properties: 
+      BucketName: !Ref ReactBucketName
+  # Defines the S3 bucket policy to control access to the Application ReactBucket.
+  S3ReactBucketPolicy:
+    Type: 'AWS::S3::BucketPolicy'
+    Properties:
+      Bucket: !Ref ReactBucketName
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          # This statement denies any S3 operations if the request is not made over HTTPS (secure transport).
+          - Action:
+              - 's3:*'
+            Effect: Deny
+            Principal: '*'
+            Resource: !Sub arn:aws:s3:::${ReactBucketName}/*
+            Condition:
+              Bool:
+                 "aws:SecureTransport": "false"
+          # This statement allows the specified CloudFront distribution to get objects from this S3 bucket.
+          - Action:
+              - 's3:GetObject'
+            Effect: Allow
+            Principal:
+              Service: "cloudfront.amazonaws.com"
+            # Restricts access to only the CloudFront distribution passed in as a parameter.
+            Condition:
+              StringEquals: 
+                AWS:SourceArn: !Sub "arn:aws:cloudfront::${AwsAccountNumber}:distribution/${ReactCloudFrontDistribution}"
+            Resource: !Sub arn:aws:s3:::${ReactBucketName}/*

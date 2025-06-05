@@ -1,0 +1,121 @@
+# Specifies the AWS CloudFormation template language version.
+AWSTemplateFormatVersion: '2010-09-09'
+# Specifies the AWS Serverless Application Model (SAM) transform, which simplifies CloudFormation syntax for serverless resources.
+Transform: AWS::Serverless-2016-10-31
+Description: >
+   Cloudfront Infrastructure Stack
+
+# Defines parameters that are passed to this nested stack from the parent stack.
+Parameters:
+  # The Hosted Zone ID for CloudFront distributions. This is a fixed value provided by AWS.
+  CloudfrontHostedZoneID: 
+    Type: String
+    Default: Z2FDTNDATAQYW2 
+  # The default document to serve when a directory is requested (e.g., 'index.html').
+  IndexDocument:
+    Type: String
+    Description: "Index document"
+    Default: "index.html"
+  # The document to serve for errors. Note: For Single Page Applications (SPAs), this will be overridden by custom responses.
+  ErrorDocument:
+    Type: String
+    Description: "The error document, ignored in SPA mode"
+    Default: "404.html"
+  # The name of the S3 bucket that is passed in by parent template.
+  ReactBucketName:
+    Type: String
+  # The custom domain name (e.g., 'www.example.com') that will be associated with the CloudFront distribution. 
+  Route53DomainName:
+    Type: String
+  # The ID of your Hosted Zone in Route 53 where the DNS record for the custom domain will be created.
+  HostedZoneIDName:
+    Type: String
+  # The ARN of the ACM SSL/TLS certificate located in the us-east-1 region, required for custom domains with HTTPS.
+  CloudFrontCertUsEast1:
+    Type: String
+  AwsAccountNumber:
+    Type: String 
+
+# Defines the AWS resources to be created by this stack.
+Resources:
+  # Defines an Origin Access Control (OAC) to restrict S3 bucket access to only this CloudFront distribution.
+  OriginAccessControl:
+    Type:  AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        OriginAccessControlOriginType: s3
+        Name: react-S3-bucket-oac
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  # Defines the CloudFront distribution for the React application.
+  ReactCloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        # A comment for the CloudFront distribution, often set to the stack name for easier identification.
+        Comment: !Ref AWS::StackName
+        # The default object to return when the root URL is requested.
+        DefaultRootObject: !Ref IndexDocument
+        HttpVersion: http2
+        # Configures custom error responses, often used in SPAs to redirect 403/404 errors to the index document.
+        CustomErrorResponses:
+          - ErrorCachingMinTTL: 10
+            ErrorCode: 403 
+            ResponseCode: 200
+            ResponsePagePath: !Sub "/${IndexDocument}"
+          - ErrorCachingMinTTL: 10
+            ErrorCode: 404 
+            ResponseCode: 200
+            ResponsePagePath: !Sub "/${IndexDocument}"
+        # Defines the origin(s) for the CloudFront distribution.
+        Origins:
+          # Specifies the S3 bucket as the origin.
+          - DomainName: !Sub "${ReactBucketName}.s3.${AWS::Region}.amazonaws.com"
+            Id: bucketOrigin
+            # Associates the OAC with this origin to enforce restricted access.
+            OriginAccessControlId: !Ref OriginAccessControl
+            S3OriginConfig:
+              # OriginAccessIdentity is set to "" when using OAC.
+              OriginAccessIdentity: ""
+        # Defines the default cache behavior for requests that don't match other cache behaviors.
+        DefaultCacheBehavior:
+          Compress: true
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6 # caching optimized policy defined by documentation https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/using-managed-cache-policies.html
+          OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac # managed policy https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/using-managed-origin-request-policies.html
+          AllowedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+          TargetOriginId: bucketOrigin
+          # Redirects HTTP requests to HTTPS.
+          ViewerProtocolPolicy: redirect-to-https
+        # Specifies the price class for the distribution, affecting cost and geographic coverage.
+        PriceClass: "PriceClass_All"
+        # Associates custom domain names (aliases) with the CloudFront distribution.
+        Aliases:
+          - !Sub ${Route53DomainName}
+        # Configures the SSL/TLS certificate for HTTPS.
+        ViewerCertificate:
+          AcmCertificateArn: !Sub arn:aws:acm:us-east-1:${AwsAccountNumber}:certificate/${CloudFrontCertUsEast1}
+          SslSupportMethod: sni-only
+          MinimumProtocolVersion: TLSv1.2_2021
+
+  # Creates a Route 53 Alias record to point the custom domain name to the CloudFront distribution.
+  Route53ToCloudfront:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Sub ${HostedZoneIDName}
+      Name: !Sub ${Route53DomainName}
+      Type: A
+      # Configures the record as an Alias to the CloudFront distribution.
+      AliasTarget:
+        DNSName: !GetAtt ReactCloudFrontDistribution.DomainName
+        HostedZoneId: !Ref CloudfrontHostedZoneID # stated to use this specific hostedzoneID in the AWS documentation https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-route53-aliastarget.html
+
+# Defines outputs that can be referenced by other stacks or viewed in the AWS CloudFormation console.
+Outputs:
+  # Outputs the ID of the created CloudFront distribution.
+  CloudfrontDistributionID:
+    Value: !Ref ReactCloudFrontDistribution
